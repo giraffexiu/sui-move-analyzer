@@ -2,3 +2,5 @@ target/
 *.lock
 *build/
 tmp/
+.kiro
+.vscode
