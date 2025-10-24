@@ -55,6 +55,7 @@ pub mod move_generate_spec_file;
 pub mod move_generate_spec_sel;
 pub mod snap_cache;
 pub mod sui_move_analyzer_beta_2024;
+pub mod function_analyzer;
 
 use move_package::source_package::parsed_manifest::{
     Dependencies, Dependency, DependencyKind, GitInfo, InternalDependency,

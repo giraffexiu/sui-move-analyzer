@@ -27,20 +27,24 @@ struct VersionEntry {
     packages: Vec<Package>,
 }
 
-/// 从远程拉取最新的system packages JSON并解析（假设按顺序排列，取最后一个）
+/// 使用curl从远程拉取最新的system packages JSON并解析（假设按顺序排列，取最后一个）
 fn fetch_latest_system_packages() -> anyhow::Result<Option<(u32, VersionEntry)>> {
-    let response = ureq::get(MANIFEST_JSON_URL).call()?;
-    let status = response.status();
-    if !(200..=299).contains(&status) {
-        return Err(anyhow::anyhow!(format!(
-            "get json manifest.json: {}",
-            response.status()
-        )));
+    use std::process::Command;
+    
+    println!("Fetching manifest JSON with curl");
+    let output = Command::new("curl")
+        .arg("-s")
+        .arg("-L") // Follow redirects
+        .arg(MANIFEST_JSON_URL)
+        .output()?;
+    
+    if !output.status.success() {
+        return Err(anyhow::anyhow!("curl command failed"));
     }
-
-    println!("start fetch json");
-    let json_data: Value = serde_json::from_reader(response.into_reader())?;
-    println!("{:?}", json_data);
+    
+    let json_str = String::from_utf8(output.stdout)?;
+    let json_data: Value = serde_json::from_str(&json_str)?;
+    
     if let Value::Object(map) = json_data {
         let mut entries: Vec<(String, Value)> = map.into_iter().collect();
         if let Some((last_key, last_value)) = entries.pop() {
@@ -50,7 +54,7 @@ fn fetch_latest_system_packages() -> anyhow::Result<Option<(u32, VersionEntry)>>
             }
         }
     }
-
+    
     Ok(None)
 }
 
