@@ -4268,18 +4268,26 @@ impl<'a> CallAnalyzer<'a> {
                 // Analyze the receiver expression first
                 self.extract_calls_from_expression(receiver, module_info, calls, visited_calls);
                 
-                // Handle Move's method call syntax (dot notation)
-                if let Some(call_info) = self.resolve_method_call(receiver, method_name, type_args, args, module_info) {
-                    let call_signature = self.generate_method_call_signature(&call_info, args);
-                    let call_key = format!("{}::{}", call_info.module, call_signature);
-                    
-                    if !visited_calls.contains(&call_key) {
-                        visited_calls.insert(call_key);
-                        calls.push(call_info);
+                // For call graph analysis, skip member method calls like self.price(), self.is_null()
+                // These are typically getters/setters rather than function calls to other modules
+                let method_name_str = method_name.value.as_str();
+                if !self.is_member_method_pattern(method_name_str) {
+                    // Handle Move's method call syntax (dot notation) only for non-member methods
+                    if let Some(call_info) = self.resolve_method_call(receiver, method_name, type_args, args, module_info) {
+                        // Additional check to ensure this is a real function call, not a member method
+                        if self.should_include_in_call_graph(method_name_str, &call_info.module) {
+                            let call_signature = self.generate_method_call_signature(&call_info, args);
+                            let call_key = format!("{}::{}", call_info.module, call_signature);
+                            
+                            if !visited_calls.contains(&call_key) {
+                                visited_calls.insert(call_key);
+                                calls.push(call_info);
+                            }
+                        }
                     }
                 }
                 
-                // Recursively analyze method arguments
+                // Always recursively analyze method arguments for nested calls
                 for arg in &args.value {
                     self.extract_calls_from_expression(arg, module_info, calls, visited_calls);
                 }
@@ -4488,23 +4496,25 @@ impl<'a> CallAnalyzer<'a> {
             NameAccessChain_::Single(path_entry) => {
                 let function_name = path_entry.name.value.as_str();
                 
-                // Check if this is a built-in Move function
+                // Skip built-in functions for call graph analysis
                 if self.is_builtin_function(function_name) {
-                    return Some(FunctionCall::new(
-                        PathBuf::from("<builtin>"),
-                        format!("{}(...)", function_name),
-                        "std".to_string(),
-                    ));
+                    return None;
                 }
                 
                 // Try to resolve as a function in the current module
                 if let Some(call_info) = self.resolve_local_function_call(function_name, current_module) {
-                    return Some(call_info);
+                    // Check if this call should be included in call graph
+                    if self.should_include_in_call_graph(function_name, &call_info.module) {
+                        return Some(call_info);
+                    }
                 }
                 
                 // Try to resolve as an imported function
                 if let Some(call_info) = self.resolve_imported_function_call(function_name, current_module) {
-                    return Some(call_info);
+                    // Check if this call should be included in call graph
+                    if self.should_include_in_call_graph(function_name, &call_info.module) {
+                        return Some(call_info);
+                    }
                 }
                 
                 None
@@ -4526,52 +4536,58 @@ impl<'a> CallAnalyzer<'a> {
                 };
                 
                 if entries.len() == 1 {
-                    // Two-part name: module::function
+                    // Two-part name: module::function or struct::method
                     let func_name = entries[0].name.value.as_str();
                     
-                    // Check if this is a standard library call
+                    // Skip standard library calls for call graph analysis
                     if self.is_std_module(root_name) {
-                        return Some(FunctionCall::new(
-                            PathBuf::from("<std>"),
-                            format!("{}(...)", func_name),
-                            root_name.to_string(),
-                        ));
+                        return None;
                     }
                     
-                    // Try to resolve the module and function
+                    // First try to resolve as a module function call
                     if let Some(call_info) = self.resolve_module_function_call(root_name, func_name, current_module) {
-                        return Some(call_info);
+                        // Check if this call should be included in call graph
+                        if self.should_include_in_call_graph(func_name, &call_info.module) {
+                            return Some(call_info);
+                        }
                     }
+                    
+                    // If not found as module function, check if it's a struct method call
+                    // In Move, struct::method() calls are actually module functions that take the struct as first parameter
+                    // We should look for the function in the current module or imported modules
+                    if let Some(call_info) = self.resolve_struct_method_call(root_name, func_name, current_module) {
+                        // Check if this call should be included in call graph
+                        if self.should_include_in_call_graph(func_name, &call_info.module) {
+                            return Some(call_info);
+                        }
+                    }
+                    
+                    // If still not found, don't create a placeholder - return None
+                    // This prevents generating fake module names like "best_ask_orderModule"
+                    None
                 } else if entries.len() == 2 {
                     // Three-part name: address::module::function
                     let mod_name = entries[0].name.value.as_str();
                     let func_name = entries[1].name.value.as_str();
                     
-                    // Handle standard library addresses
-                    if root_name == "std" || root_name == "0x1" {
-                        return Some(FunctionCall::new(
-                            PathBuf::from("<std>"),
-                            format!("{}(...)", func_name),
-                            mod_name.to_string(),
-                        ));
-                    }
-                    
-                    // Handle Sui framework addresses
-                    if root_name == "sui" || root_name == "0x2" {
-                        return Some(FunctionCall::new(
-                            PathBuf::from("<sui>"),
-                            format!("{}(...)", func_name),
-                            mod_name.to_string(),
-                        ));
+                    // Skip standard library and framework calls for call graph analysis
+                    if root_name == "std" || root_name == "0x1" || root_name == "sui" || root_name == "0x2" {
+                        return None;
                     }
                     
                     // Try to resolve external module function
                     if let Some(call_info) = self.resolve_external_function_call(root_name, mod_name, func_name) {
-                        return Some(call_info);
+                        // Check if this call should be included in call graph
+                        if self.should_include_in_call_graph(func_name, &call_info.module) {
+                            return Some(call_info);
+                        }
                     }
+                    
+                    None
+                } else {
+                    // More than 2 entries - not supported
+                    None
                 }
-                
-                None
             }
         }
     }
@@ -4579,7 +4595,7 @@ impl<'a> CallAnalyzer<'a> {
     /// Check if a function name represents a built-in Move function
     /// 
     /// Built-in functions are intrinsic to the Move language and don't
-    /// belong to any specific module.
+    /// belong to any specific module. For call graph analysis, we skip these.
     /// 
     /// # Arguments
     /// * `function_name` - The name of the function to check
@@ -4595,6 +4611,69 @@ impl<'a> CallAnalyzer<'a> {
             "move_to" | "move_from" | "borrow_global" | "borrow_global_mut" |
             "exists" | "freeze" | "copy" | "move" |
             "abort" | "return"
+        )
+    }
+
+    /// Check if a function call should be included in call graph analysis
+    /// 
+    /// This method filters out calls that are not relevant for function call graph analysis:
+    /// - Built-in functions (assert!, abort, etc.)
+    /// - Standard library utility functions that don't represent business logic
+    /// - Member method calls on primitive types
+    /// 
+    /// # Arguments
+    /// * `function_name` - The name of the function
+    /// * `module_name` - The name of the module containing the function
+    /// 
+    /// # Returns
+    /// True if the call should be included in call graph analysis
+    fn should_include_in_call_graph(&self, function_name: &str, module_name: &str) -> bool {
+        // Skip built-in functions
+        if self.is_builtin_function(function_name) {
+            return false;
+        }
+        
+        // Skip standard library utility functions that are not business logic
+        if self.is_std_module(module_name) {
+            return false;
+        }
+        
+        // Skip common member method patterns that are not function calls
+        if self.is_member_method_pattern(function_name) {
+            return false;
+        }
+        
+        true
+    }
+
+    /// Check if a function name represents a member method pattern
+    /// 
+    /// Member methods are typically getters, setters, or operations on the object itself
+    /// rather than calls to other functions.
+    /// 
+    /// # Arguments
+    /// * `function_name` - The name of the function to check
+    /// 
+    /// # Returns
+    /// True if this appears to be a member method rather than a function call
+    fn is_member_method_pattern(&self, function_name: &str) -> bool {
+        // Common getter patterns
+        if function_name.starts_with("get_") || 
+           function_name.starts_with("is_") || 
+           function_name.starts_with("has_") {
+            return true;
+        }
+        
+        // Common member methods
+        matches!(function_name,
+            // Object state queries
+            "is_null" | "is_empty" | "length" | "size" | "capacity" |
+            // Object accessors
+            "borrow" | "borrow_mut" | "value" | "inner" |
+            // Common property getters
+            "price" | "timestamp" | "expire_timestamp" | "amount" | "balance" |
+            // Object operations that don't call other functions
+            "destroy" | "extract" | "split" | "join" | "merge"
         )
     }
 
@@ -4668,31 +4747,16 @@ impl<'a> CallAnalyzer<'a> {
     /// Addresses requirements 5.2, 5.3 from the specification
     fn resolve_imported_function_call(
         &self,
-        function_name: &str,
+        _function_name: &str,
         _current_module: &ModuleInfo,
     ) -> Option<FunctionCall> {
-        // For now, we'll implement a basic resolution
-        // In a full implementation, this would parse use statements
-        // and resolve imported functions accordingly
+        // For call graph analysis, we don't include standard library imports
+        // as they are not part of the business logic call graph
         
-        // Check common imported modules
-        let common_modules = vec![
-            ("vector", "std"),
-            ("option", "std"),
-            ("string", "std"),
-            ("debug", "std"),
-            ("signer", "std"),
-        ];
-        
-        for (module_name, address) in common_modules {
-            if self.function_exists_in_std_module(function_name, module_name) {
-                return Some(FunctionCall::new(
-                    PathBuf::from(format!("<{}>", address)),
-                    format!("{}(...)", function_name),
-                    module_name.to_string(),
-                ));
-            }
-        }
+        // In a full implementation, this would:
+        // 1. Parse use statements in the current module
+        // 2. Look for user-defined imported functions (not std library)
+        // 3. Return only business logic function calls
         
         None
     }
@@ -4735,6 +4799,156 @@ impl<'a> CallAnalyzer<'a> {
         None
     }
 
+    /// Resolve a struct method call
+    /// 
+    /// In Move, calls like `struct_name::method_name()` are actually calls to module functions
+    /// that operate on the struct. This method tries to find such functions in the current
+    /// module or imported modules.
+    /// 
+    /// # Arguments
+    /// * `struct_name` - Name of the struct (e.g., "best_ask_order")
+    /// * `method_name` - Name of the method (e.g., "price")
+    /// * `current_module` - Information about the current module
+    /// 
+    /// # Returns
+    /// Optional FunctionCall if the struct method can be resolved
+    /// 
+    /// # Requirements
+    /// Addresses requirements 5.2, 5.3 from the specification
+    fn resolve_struct_method_call(
+        &self,
+        struct_name: &str,
+        method_name: &str,
+        current_module: &ModuleInfo,
+    ) -> Option<FunctionCall> {
+        // In Move, struct methods are typically named as just the method name
+        // and they take the struct as the first parameter
+        
+        // First, try to find the function with the method name in the current module
+        if let Some(module_def) = self.find_module_definition(current_module) {
+            for member in &module_def.members {
+                if let ModuleMember::Function(function) = member {
+                    if function.name.0.value.as_str() == method_name {
+                        // Check if this function takes the struct as first parameter
+                        if self.function_operates_on_struct(function, struct_name) {
+                            let signature = self.generate_function_signature(function);
+                            return Some(FunctionCall::new(
+                                current_module.file_path.clone(),
+                                signature,
+                                current_module.name.as_str().to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If not found in current module, try to find in other modules in the project
+        // This handles cases where the struct and its methods are defined in different modules
+        for (_, source_defs) in &self.project.modules {
+            let source_defs = source_defs.borrow();
+            
+            // Search in sources
+            for (file_path, definitions) in &source_defs.sources {
+                for definition in definitions {
+                    if let Definition::Module(module_def) = definition {
+                        // Skip the current module as we already checked it
+                        if module_def.name.0.value == current_module.name {
+                            continue;
+                        }
+                        
+                        for member in &module_def.members {
+                            if let ModuleMember::Function(function) = member {
+                                if function.name.0.value.as_str() == method_name {
+                                    if self.function_operates_on_struct(function, struct_name) {
+                                        let signature = self.generate_function_signature(function);
+                                        return Some(FunctionCall::new(
+                                            file_path.clone(),
+                                            signature,
+                                            module_def.name.0.value.as_str().to_string(),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// Check if a function operates on a specific struct type
+    /// 
+    /// This method examines the function's parameters to see if it takes
+    /// the specified struct as a parameter (typically the first parameter).
+    /// 
+    /// # Arguments
+    /// * `function` - The function to examine
+    /// * `struct_name` - The name of the struct to look for
+    /// 
+    /// # Returns
+    /// True if the function appears to operate on the struct
+    fn function_operates_on_struct(&self, function: &Function, struct_name: &str) -> bool {
+        // Check if any parameter type matches the struct name
+        for (_loc, _param_name, param_type) in &function.signature.parameters {
+            if self.type_references_struct(param_type, struct_name) {
+                return true;
+            }
+        }
+        
+        // Also check return type
+        self.type_references_struct(&function.signature.return_type, struct_name)
+    }
+
+    /// Check if a type references a specific struct
+    /// 
+    /// # Arguments
+    /// * `type_` - The type to examine
+    /// * `struct_name` - The struct name to look for
+    /// 
+    /// # Returns
+    /// True if the type references the struct
+    fn type_references_struct(&self, type_: &move_compiler::parser::ast::Type, struct_name: &str) -> bool {
+        match &type_.value {
+            move_compiler::parser::ast::Type_::Apply(name_chain) => {
+                // Check if the type name matches the struct name
+                match &name_chain.value {
+                    NameAccessChain_::Single(path_entry) => {
+                        path_entry.name.value.as_str() == struct_name
+                    }
+                    NameAccessChain_::Path(name_path) => {
+                        // Check if any part of the path matches the struct name
+                        if let move_compiler::parser::ast::LeadingNameAccess_::Name(name) = &name_path.root.name.value {
+                            if name.value.as_str() == struct_name {
+                                return true;
+                            }
+                        }
+                        
+                        // Check entries
+                        for entry in &name_path.entries {
+                            if entry.name.value.as_str() == struct_name {
+                                return true;
+                            }
+                        }
+                        
+                        false
+                    }
+                }
+            }
+            move_compiler::parser::ast::Type_::Ref(_is_mut, inner_type) => {
+                // Check the inner type for references
+                self.type_references_struct(inner_type, struct_name)
+            }
+            move_compiler::parser::ast::Type_::Multiple(types) => {
+                // Check if any of the types reference the struct
+                types.iter().any(|t| self.type_references_struct(t, struct_name))
+            }
+            _ => false,
+        }
+    }
+
     /// Resolve a function call from an external module with full address qualification
     /// 
     /// # Arguments
@@ -4762,42 +4976,7 @@ impl<'a> CallAnalyzer<'a> {
         ))
     }
 
-    /// Check if a function exists in a standard library module
-    /// 
-    /// # Arguments
-    /// * `function_name` - Name of the function to check
-    /// * `module_name` - Name of the standard library module
-    /// 
-    /// # Returns
-    /// True if the function exists in the specified std module
-    /// 
-    /// # Requirements
-    /// Addresses requirements 5.5, 7.2 from the specification
-    fn function_exists_in_std_module(&self, function_name: &str, module_name: &str) -> bool {
-        match module_name {
-            "vector" => matches!(function_name,
-                "empty" | "length" | "borrow" | "push_back" | "pop_back" |
-                "destroy_empty" | "swap" | "singleton" | "reverse" |
-                "append" | "is_empty" | "contains" | "index_of" | "remove"
-            ),
-            "option" => matches!(function_name,
-                "none" | "some" | "is_none" | "is_some" | "contains" |
-                "borrow" | "borrow_mut" | "get_with_default" | "fill" |
-                "extract" | "swap" | "destroy_with_default" | "destroy_some" | "destroy_none"
-            ),
-            "string" => matches!(function_name,
-                "utf8" | "try_utf8" | "bytes" | "is_empty" | "length" |
-                "append" | "append_utf8" | "insert" | "sub_string"
-            ),
-            "debug" => matches!(function_name,
-                "print" | "print_stack_trace"
-            ),
-            "signer" => matches!(function_name,
-                "address_of" | "borrow_address"
-            ),
-            _ => false,
-        }
-    }
+
 
     /// Generate a function signature for a called function
     /// 
@@ -5024,21 +5203,24 @@ impl<'a> CallAnalyzer<'a> {
     /// Addresses requirements 7.2, 7.4 from the specification
     fn infer_expression_type(&self, expression: &Exp, _module_info: &ModuleInfo) -> Option<String> {
         match &expression.value {
-            // Variable access - would need symbol table lookup
-            Exp_::Name(name_access_chain) => {
-                // Simplified: return the name as potential type
-                Some(self.name_access_chain_to_string(name_access_chain))
+            // Variable access - we cannot reliably infer variable types without a symbol table
+            // In Move, variables like 'ask_ref' or 'best_ask_order' are local variables whose
+            // types would need to be tracked through the function's execution flow
+            Exp_::Name(_name_access_chain) => {
+                // Don't guess - return None if we can't reliably determine the type
+                // This prevents generating fake module names like "ask_refModule"
+                None
             }
             
-            // Struct construction
+            // Struct construction - this gives us the actual struct type
             Exp_::Pack(name_access_chain, _fields) => {
                 Some(self.name_access_chain_to_string(name_access_chain))
             }
             
             // Function calls - return type would need function signature lookup
-            Exp_::Call(name_chain, _args) => {
-                // Simplified: try to infer from function name
-                Some(format!("CallResult({})", self.name_access_chain_to_string(name_chain)))
+            Exp_::Call(_name_chain, _args) => {
+                // We cannot reliably infer return types without full type analysis
+                None
             }
             
             // For other expressions, we'd need more sophisticated type inference
@@ -5065,124 +5247,25 @@ impl<'a> CallAnalyzer<'a> {
     /// Addresses requirements 7.1, 7.2, 7.4 from the specification
     fn resolve_method_by_type(
         &self,
-        receiver_type: &str,
-        method_name: &Name,
+        _receiver_type: &str,
+        _method_name: &Name,
         _type_args: &Option<Vec<move_compiler::parser::ast::Type>>,
-        args: &Spanned<Vec<Exp>>,
-        module_info: &ModuleInfo,
+        _args: &Spanned<Vec<Exp>>,
+        _module_info: &ModuleInfo,
     ) -> Option<FunctionCall> {
-        let method_name_str = method_name.value.as_str();
-        
-        // Try to find the method in the current module first
-        if let Some(method_call) = self.find_method_in_module(receiver_type, method_name_str, module_info) {
-            return Some(method_call);
-        }
-        
-        // Try to find the method in imported modules
-        if let Some(method_call) = self.find_method_in_imports(receiver_type, method_name_str, module_info) {
-            return Some(method_call);
-        }
-        
-        // Fallback: create a generic method call entry
-        Some(FunctionCall::new(
-            module_info.file_path.clone(),
-            format!("{}::{}({})", receiver_type, method_name_str, self.format_args_signature(args)),
-            format!("{}Module", receiver_type), // Inferred module name
-        ))
-    }
-
-    /// Find a method in the current module
-    /// 
-    /// # Arguments
-    /// * `receiver_type` - Type of the receiver object
-    /// * `method_name` - Name of the method
-    /// * `module_info` - Current module information
-    /// 
-    /// # Returns
-    /// * `Option<FunctionCall>` - Method call information if found
-    fn find_method_in_module(
-        &self,
-        receiver_type: &str,
-        method_name: &str,
-        module_info: &ModuleInfo,
-    ) -> Option<FunctionCall> {
-        // Look for functions that match the method pattern
-        if let Some(module_def) = self.find_module_definition(module_info) {
-            for member in &module_def.members {
-                if let ModuleMember::Function(function) = member {
-                    let func_name = function.name.0.value.as_str();
-                    
-                    // Check if this function could be the method we're looking for
-                    if func_name == method_name {
-                        // Check if the first parameter matches the receiver type
-                        if let Some((_loc, _param_name, param_type)) = function.signature.parameters.first() {
-                            let param_type_str = self.type_to_string(param_type);
-                            if param_type_str.contains(receiver_type) || 
-                               param_type_str.starts_with("&") && param_type_str.contains(receiver_type) {
-                                return Some(FunctionCall::new(
-                                    module_info.file_path.clone(),
-                                    format!("{}({})", func_name, self.format_function_params(&function.signature.parameters)),
-                                    module_info.name.as_str().to_string(),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Don't create placeholder calls - return None if method cannot be resolved
+        // This prevents generating fake module names like "best_ask_orderModule"
         None
     }
 
-    /// Find a method in imported modules
-    /// 
-    /// # Arguments
-    /// * `receiver_type` - Type of the receiver object
-    /// * `method_name` - Name of the method
-    /// * `module_info` - Current module information
-    /// 
-    /// # Returns
-    /// * `Option<FunctionCall>` - Method call information if found
-    fn find_method_in_imports(
-        &self,
-        receiver_type: &str,
-        method_name: &str,
-        _module_info: &ModuleInfo,
-    ) -> Option<FunctionCall> {
-        // Simplified implementation - in a full version, this would:
-        // 1. Parse use statements in the current module
-        // 2. Look up functions in imported modules
-        // 3. Check if any imported function matches the method signature
-        
-        // For now, create a placeholder for common Move patterns
-        if self.is_common_move_method(receiver_type, method_name) {
-            Some(FunctionCall::new(
-                PathBuf::from("std_lib.move"), // Placeholder for standard library
-                format!("{}::{}(...)", receiver_type, method_name),
-                format!("{}Module", receiver_type),
-            ))
-        } else {
-            None
-        }
-    }
+
 
     /// Check if this is a common Move method pattern
     /// 
     /// # Arguments
     /// * `receiver_type` - Type of the receiver
     /// * `method_name` - Name of the method
-    /// 
-    /// # Returns
-    /// * `bool` - True if this matches a common Move pattern
-    fn is_common_move_method(&self, receiver_type: &str, method_name: &str) -> bool {
-        // Common Move patterns
-        match (receiver_type, method_name) {
-            ("vector", "push_back" | "pop_back" | "length" | "is_empty") => true,
-            ("Option", "is_some" | "is_none" | "extract" | "borrow") => true,
-            ("Table", "add" | "remove" | "contains" | "borrow") => true,
-            ("Coin", "value" | "split" | "join") => true,
-            _ => false,
-        }
-    }
+
 
     /// Generate a method call signature
     /// 
@@ -5201,35 +5284,9 @@ impl<'a> CallAnalyzer<'a> {
         call_info.function.clone()
     }
 
-    /// Format function parameters for signature generation
-    /// 
-    /// # Arguments
-    /// * `parameters` - Function parameters to format
-    /// 
-    /// # Returns
-    /// * `String` - Formatted parameter list
-    fn format_function_params(
-        &self,
-        parameters: &[(Option<move_ir_types::location::Loc>, move_compiler::parser::ast::Var, move_compiler::parser::ast::Type)],
-    ) -> String {
-        parameters.iter()
-            .map(|(_loc, var, type_)| {
-                format!("{}: {}", var.0.value.as_str(), self.type_to_string(type_))
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
 
-    /// Format arguments signature for call generation
-    /// 
-    /// # Arguments
-    /// * `args` - Arguments to format
-    /// 
-    /// # Returns
-    /// * `String` - Formatted arguments signature
-    fn format_args_signature(&self, args: &Spanned<Vec<Exp>>) -> String {
-        format!("{} args", args.value.len())
-    }
+
+
 
     /// Convert a name access chain to string for method resolution
     /// 
