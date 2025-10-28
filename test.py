@@ -5,7 +5,7 @@ Simple test file to call the Move Function Analyzer library and output raw JSON 
 
 import json
 import sys
-from move_function_analyzer import MoveFunctionAnalyzer
+from sui_move_analyzer import MoveFunctionAnalyzer
 
 def main():
     """Test the analyzer with specific project path and function name."""

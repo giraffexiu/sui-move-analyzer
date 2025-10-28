@@ -37,7 +37,7 @@ def main():
     
     # Get paths
     script_dir = Path(__file__).parent.absolute()
-    rust_dir = script_dir.parent / "src" / "beta-2024"
+    rust_dir = script_dir / "src" / "beta-2024"
     
     # Check if Rust project exists
     if not rust_dir.exists():
@@ -72,7 +72,7 @@ def main():
     
     # Copy binary to package directory
     print("\n📋 Copying binary to package...")
-    package_bin_dir = script_dir / "move_function_analyzer" / "bin"
+    package_bin_dir = script_dir / "sui_move_analyzer" / "bin"
     package_bin_dir.mkdir(parents=True, exist_ok=True)
     
     dst_binary = package_bin_dir / binary_name
@@ -101,11 +101,11 @@ def main():
     # Test the installation
     print("\n🧪 Testing installation...")
     try:
-        import move_function_analyzer
-        print(f"✅ Package imported successfully (version {move_function_analyzer.__version__})")
+        import sui_move_analyzer
+        print(f"✅ Package imported successfully (version {sui_move_analyzer.__version__})")
         
         # Test analyzer creation
-        analyzer = move_function_analyzer.MoveFunctionAnalyzer()
+        analyzer = sui_move_analyzer.MoveFunctionAnalyzer()
         print("✅ Analyzer created successfully")
         
     except Exception as e:
@@ -115,7 +115,7 @@ def main():
     print("\n🎉 Installation completed successfully!")
     print("\nYou can now use the library:")
     print("```python")
-    print("from move_function_analyzer import MoveFunctionAnalyzer")
+    print("from sui_move_analyzer import MoveFunctionAnalyzer")
     print("analyzer = MoveFunctionAnalyzer()")
     print("results = analyzer.analyze('/path/to/project', 'function_name')")
     print("```")

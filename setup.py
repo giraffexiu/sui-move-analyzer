@@ -25,7 +25,7 @@ class CustomInstallCommand(install):
         
         # Get the directory containing this setup.py
         setup_dir = Path(__file__).parent.absolute()
-        rust_dir = setup_dir.parent / "src" / "beta-2024"
+        rust_dir = setup_dir / "src" / "beta-2024"
         
         # Build the Rust project
         try:
@@ -48,7 +48,7 @@ class CustomInstallCommand(install):
             binary_name += ".exe"
         
         src_binary = rust_dir / "target" / "release" / binary_name
-        dst_dir = setup_dir / "move_function_analyzer" / "bin"
+        dst_dir = setup_dir / "sui_move_analyzer" / "bin"
         dst_dir.mkdir(parents=True, exist_ok=True)
         dst_binary = dst_dir / binary_name
         
@@ -70,7 +70,7 @@ if readme_path.exists():
         long_description = f.read()
 
 setup(
-    name="move-function-analyzer",
+    name="sui-move-analyzer",
     version="1.0.0",
     author="Move Contributors",
     author_email="opensource@movebit.xyz",
@@ -102,7 +102,7 @@ setup(
     },
     include_package_data=True,
     package_data={
-        "move_function_analyzer": ["bin/*"],
+        "sui_move_analyzer": ["bin/*"],
     },
     keywords="move blockchain sui analysis static-analysis",
     project_urls={
