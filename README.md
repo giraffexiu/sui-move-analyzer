@@ -1,58 +1,30 @@
-# sui-move-analyzer
-**Table of Contents**
-* [Introduction](#Introduction)
-* [Features](#Features)
-* [Installation](#Installation)
-* [Support](#Support)
+# Move Function Analyzer | Move 函数分析器
 
-## Introduction <span id="Introduction">
-The **sui-move-analyzer** is a Visual Studio Code plugin for **Sui Move** language developed by [MoveBit](https://movebit.xyz). Although this is an alpha release, it has many useful features, such as **highlight, autocomplete, go to definition/references**, and so on.
+[English](#english) | [中文](#chinese)
 
-## Features <span id="Features">
+---
 
-Here are some of the features of the sui-move-analyzer Visual Studio Code extension. To see them, open a
-Move source file (a file with a `.move` file extension) and:
+## English
 
-- See Move keywords and types highlighted in appropriate colors.
-- As you type, Move keywords will appear as completion suggestions.
-- If the opened Move source file is located within a buildable project (a `Move.toml` file can be
-  found in one of its parent directories), the following advanced features will also be available:
-  - compiler diagnostics
-  - sui commands line tool(you need install Sui Client CLI locally)
-  - sui project template
-  - go to definition
-  - go to references
-  - type on hover
-  - inlay hints
-  - linter for move file
-  - ...
-Got it 👍 I’ll rewrite the **Installation** section in English, simplify it to reflect the new flow (just install from Marketplace), add the optional build instructions, and remove all the PATH-related steps.
+**Move Function Analyzer** is a powerful toolkit for analyzing Move functions in Sui Move projects, developed by [MoveBit](https://movebit.xyz). It provides deep function analysis capabilities with both command-line interface and Python bindings for programmatic access.
 
-## Installation <span id="Installation">
+### 🚀 Features
 
-**Note**:
+- **Deep Function Analysis**: Extract source code, analyze parameters, and generate call graphs
+- **Python Library**: Easy-to-use Python API for programmatic function analysis
+- **Command Line Tool**: Standalone binary for function analysis in CI/CD pipelines
+- **Comprehensive Results**: Function signatures, source code, location info, parameters, and call relationships
+- **Multi-project Support**: Works with Sui Move projects and supports various Move language features
 
-1. If you already have *move-analyzer* or *aptos-move-analyzer* installed, please disable them before installing **sui-move-analyzer** to avoid conflicts.
-2. You need to install [Sui CLI](https://docs.sui.io/references/cli) first, otherwise some features will not work.
+### 📦 Installation
 
-### Recommended: Install from Marketplace
+#### Python Library
 
-The **sui-move-analyzer** is now fully integrated into the VSCode extension.
-Simply install it from the **VSCode Marketplace**—no additional setup is required.
+```bash
+pip install move-function-analyzer
+```
 
-Steps:
-
-1. Open VSCode (version 1.55.2 or later).
-2. Open the Command Palette (`⇧⌘P` on macOS, or *View > Command Palette...*).
-3. Select **Extensions: Install Extensions**.
-4. Search for **sui-move-analyzer** in the Marketplace and click **Install**.
-5. Open any `.move` file and start coding with highlighting, autocomplete, diagnostics, and more.
-
-After installation, restart VSCode to ensure the extension loads properly.
-
-### Optional: Build from Source
-
-If you prefer to build the language server yourself:
+#### Build from Source
 
 ```bash
 git clone https://github.com/movebit/sui-move-analyzer.git
@@ -60,79 +32,292 @@ cd sui-move-analyzer
 cargo build --release
 ```
 
-The binary will be available at:
+The binary will be available at `target/release/move-function-analyzer`.
 
-```
-target/release/sui-move-analyzer
-```
+### 🔧 Usage
 
+#### Python API
 
+```python
+from move_function_analyzer import MoveFunctionAnalyzer
 
-### Troubleshooting
-Please note: If you don't see the version number, you can refer to the troubleshooting section."
+# Create analyzer instance
+analyzer = MoveFunctionAnalyzer()
 
-#### [1] cannot find the `sui-move-analyzer` program
-##### 1) windows
-If you are installing this extension on a Windows system and have followed the steps in Section 1.A by running the windows-installer.msi, but executing `sui-move-analyzer --version` in the command line doesn't find the `sui-move-analyzer` program, the issue may be that VSCode cannot locate the configured environment variables. You can try the following:
+# Analyze a function
+results = analyzer.analyze("/path/to/move/project", "transfer")
 
-   1. Restart VSCode and install the `sui-move-analyzer` VSCode extension.
-   2. In the Windows system settings, find the user environment variable `PATH`. Look for an entry ending with `MoveBit\sui-move-analyzer\`, and copy it.
-   3. Open the extension settings for `sui-move-analyzer` in the VSCode extension store. In the `sui-move-analyzer > server:path` entry, add the path ending with `MoveBit\sui-move-analyzer\` before `sui-move-analyzer`. The final result may look like: `C:\Users\YourUserName\AppData\Local\Apps\MoveBit\sui-move-analyzer\sui-move-analyzer.exe`
-   4. Restart a terminal and try running `sui-move-analyzer --version` in the command line again.
-
-##### 2) mac & linux
-If you see an error message *language server executable `sui-move-analyzer` could not be found* in the
-bottom-right of your Visual Studio Code screen when opening a Move file, it means that the
-`sui-move-analyzer` executable could not be found in your `PATH`. You may try the following:
-
-1. Confirm that invoking `sui-move-analyzer --version` in a command line terminal prints out
-   `sui-move-analyzer version number`. If it doesn't, then retry the instructions in **[step 1]**. If it
-   does successfully print this output, try closing and re-opening the Visual Studio Code
-   application, as it may not have picked up the update to your `PATH`.
-2. If you installed the `sui-move-analyzer` executable to a different location that is outside of your
-   `PATH`, then you may have the extension look at this location by using the the Visual Studio Code
-   settings (`⌘,` on macOS, or use the menu item *Code > Preferences > Settings*). Search for the
-   `sui-move-analyzer.server.path` setting, and set it to the location of the `sui-move-analyzer` language
-   server you installed.
-3. If you're using it in MacOS, you may meet the error `Macos cannot verify if this app contains malicious software`, you need to add support for `sui-move-analyzer` in the system settings Program Trust.
-
-
-#### [2] analyzer not work
-##### A. Need Move.toml
-Open a Move source file (a file with a .move file extension) and if the opened Move source file is located within a buildable project (a Move.toml file can be found in one of its parent directories), the following advanced features will be available:
-
-  - compiler diagnostics
-  - go to definition
-  - go to references
-  - type on hover
-  - autocomplete
-  - outline view
-  - ...
-
-Therefore, the Move.toml file must be found in the project directory for the plug-in's functionality to take effect.
-
-In addition, if you have already opened the move project before, the installed plug-in will not take effect in time. You need to reopen the vscode window and open the move project code again before the plug-in is activated. 
-
-##### B. Need Build Project with Move.toml
-When you first open a project, there will be some **dependencies** (configured in Move.toml) that need to be downloaded, so you need to run the `sui move build` command first to `build` the project. During the build process, the **dependencies** will be downloaded. Once all the **dependencies** for the project have been downloaded, sui-move-analyzer can properly `parse` the **dependencies** and project source code.
-
-
-#### [3] build failed with steps in Section 1.B
-If `cargo install --git http://github.com/movebit/sui-move-analyzer --branch master sui-move-analyzer` run failed, and meet the 
-error info as follows:
-```
-error: failed to run custom build command for librocksdb-sys...
-
---- stderr
-thread 'main' panicked at 'Unable to find libclang: "couldn't find any valid shared libraries matching: 
-['clang.dll', 'libclang.dll']..."'
+# Process results
+for result in results:
+    print(f"Contract: {result.contract}")
+    print(f"Function: {result.function}")
+    print(f"Source Code:\n{result.source}")
+    print(f"Parameters: {[p.name + ': ' + p.type for p in result.parameters]}")
+    print(f"Function Calls: {len(result.calls)}")
+    print("---")
 ```
 
-It's because it relies on `MystenLabs/sui_move_build` library, which requires an LLVM environment. You can refer to [llvm-project](https://github.com/llvm/llvm-project) go and install llvm.
+#### Command Line Tool
 
+```bash
+# Analyze a specific function
+move-function-analyzer /path/to/project function_name
 
-## Support <span id="Support">
+# Example output (JSON format)
+[
+  {
+    "contract": "my_module::nft",
+    "function": "mint(name: vector<u8>, ctx: &mut TxContext): NFT",
+    "source": "public fun mint(name: vector<u8>, ctx: &mut TxContext): NFT {\n    let nft = NFT {\n        id: object::new(ctx),\n        name,\n    };\n    nft\n}",
+    "location": {
+      "file": "/path/to/sources/nft.move",
+      "start_line": 25,
+      "end_line": 32
+    },
+    "parameter": [
+      {"name": "name", "type": "vector<u8>"},
+      {"name": "ctx", "type": "&mut TxContext"}
+    ],
+    "calls": [
+      {
+        "file": "/path/to/sources/nft.move",
+        "function": "new(ctx: &mut TxContext): UID",
+        "module": "sui::object"
+      }
+    ]
+  }
+]
+```
 
-1.If you find any issues, please report a GitHub issue to the [issue](https://github.com/movebit/sui-move-analyzer/issues) repository to get help.
+### 📊 Analysis Results
 
-2.Welcome to the developer discussion group as well: [MoveAnalyzer](https://t.me/moveanalyzer). 
+The analyzer provides comprehensive information about Move functions:
+
+- **Function Signature**: Complete signature with parameters and return types
+- **Source Code**: Full function implementation
+- **Location Info**: File path and line numbers
+- **Parameters**: Detailed parameter information with types
+- **Call Graph**: Functions called within the analyzed function
+- **Module Context**: Module and contract information
+
+### 🛠️ API Reference
+
+#### Python Classes
+
+##### `MoveFunctionAnalyzer`
+Main analyzer class for function analysis.
+
+**Methods:**
+- `analyze(project_path: str, function_name: str) → List[AnalysisResult]`
+  - Analyzes functions and returns structured results
+- `analyze_raw(project_path: str, function_name: str) → Dict[str, Any]`
+  - Returns raw JSON analysis results
+
+##### `AnalysisResult`
+Contains complete function analysis information.
+
+**Attributes:**
+- `contract: str` - Module name
+- `function: str` - Function signature  
+- `source: str` - Source code
+- `location: LocationInfo` - File location
+- `parameters: List[Parameter]` - Function parameters
+- `calls: List[FunctionCall]` - Function calls
+
+##### `LocationInfo`
+File location information.
+
+**Attributes:**
+- `file: str` - File path
+- `start_line: int` - Start line number
+- `end_line: int` - End line number
+
+##### `Parameter`
+Function parameter information.
+
+**Attributes:**
+- `name: str` - Parameter name
+- `type: str` - Parameter type
+
+##### `FunctionCall`
+Information about function calls.
+
+**Attributes:**
+- `file: str` - File containing the called function
+- `function: str` - Called function signature
+- `module: str` - Module containing the called function
+
+### 🔍 Examples
+
+See the [examples](./examples/) directory for complete usage examples including:
+- Basic NFT project analysis
+- Complex function call analysis
+- Marketplace contract analysis
+
+### 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### 📄 License
+
+This project is licensed under the Apache License 2.0.
+
+---
+
+## Chinese
+
+**Move 函数分析器**是由 [MoveBit](https://movebit.xyz) 开发的强大 Move 函数分析工具包，为 Sui Move 项目提供深度函数分析功能。它提供命令行界面和 Python 绑定，支持程序化访问。
+
+### 🚀 功能特性
+
+- **深度函数分析**：提取源码、分析参数、生成调用图
+- **Python 库**：易于使用的 Python API，支持程序化函数分析
+- **命令行工具**：独立的二进制工具，适用于 CI/CD 流水线中的函数分析
+- **全面的结果**：函数签名、源代码、位置信息、参数和调用关系
+- **多项目支持**：支持 Sui Move 项目和各种 Move 语言特性
+
+### 📦 安装方式
+
+#### Python 库
+
+```bash
+pip install move-function-analyzer
+```
+
+#### 从源码构建
+
+```bash
+git clone git@github.com:giraffexiu/sui-move-analyzer.git
+cd sui-move-analyzer
+cargo build --release
+```
+
+二进制文件将位于 `target/release/move-function-analyzer`。
+
+### 🔧 使用方法
+
+#### Python API
+
+```python
+from move_function_analyzer import MoveFunctionAnalyzer
+
+# 创建分析器实例
+analyzer = MoveFunctionAnalyzer()
+
+# 分析函数
+results = analyzer.analyze("/path/to/move/project", "transfer")
+
+# 处理结果
+for result in results:
+    print(f"合约: {result.contract}")
+    print(f"函数: {result.function}")
+    print(f"源代码:\n{result.source}")
+    print(f"参数: {[p.name + ': ' + p.type for p in result.parameters]}")
+    print(f"函数调用: {len(result.calls)}")
+    print("---")
+```
+
+#### 命令行工具
+
+```bash
+# 分析特定函数
+move-function-analyzer /path/to/project function_name
+
+# 示例输出（JSON 格式）
+[
+  {
+    "contract": "my_module::nft",
+    "function": "mint(name: vector<u8>, ctx: &mut TxContext): NFT",
+    "source": "public fun mint(name: vector<u8>, ctx: &mut TxContext): NFT {\n    let nft = NFT {\n        id: object::new(ctx),\n        name,\n    };\n    nft\n}",
+    "location": {
+      "file": "/path/to/sources/nft.move",
+      "start_line": 25,
+      "end_line": 32
+    },
+    "parameter": [
+      {"name": "name", "type": "vector<u8>"},
+      {"name": "ctx", "type": "&mut TxContext"}
+    ],
+    "calls": [
+      {
+        "file": "/path/to/sources/nft.move",
+        "function": "new(ctx: &mut TxContext): UID",
+        "module": "sui::object"
+      }
+    ]
+  }
+]
+```
+
+### 📊 分析结果
+
+分析器提供 Move 函数的全面信息：
+
+- **函数签名**：包含参数和返回类型的完整签名
+- **源代码**：完整的函数实现
+- **位置信息**：文件路径和行号
+- **参数信息**：详细的参数信息和类型
+- **调用图**：被分析函数内调用的其他函数
+- **模块上下文**：模块和合约信息
+
+### 🛠️ API 参考
+
+#### Python 类
+
+##### `MoveFunctionAnalyzer`
+用于函数分析的主要分析器类。
+
+**方法：**
+- `analyze(project_path: str, function_name: str) → List[AnalysisResult]`
+  - 分析函数并返回结构化结果
+- `analyze_raw(project_path: str, function_name: str) → Dict[str, Any]`
+  - 返回原始 JSON 分析结果
+
+##### `AnalysisResult`
+包含完整函数分析信息。
+
+**属性：**
+- `contract: str` - 模块名称
+- `function: str` - 函数签名
+- `source: str` - 源代码
+- `location: LocationInfo` - 文件位置
+- `parameters: List[Parameter]` - 函数参数
+- `calls: List[FunctionCall]` - 函数调用
+
+##### `LocationInfo`
+文件位置信息。
+
+**属性：**
+- `file: str` - 文件路径
+- `start_line: int` - 起始行号
+- `end_line: int` - 结束行号
+
+##### `Parameter`
+函数参数信息。
+
+**属性：**
+- `name: str` - 参数名称
+- `type: str` - 参数类型
+
+##### `FunctionCall`
+函数调用信息。
+
+**属性：**
+- `file: str` - 包含被调用函数的文件
+- `function: str` - 被调用函数签名
+- `module: str` - 包含被调用函数的模块
+
+### 🔍 示例
+
+查看 [examples](./examples/) 目录获取完整的使用示例，包括：
+- 基础 NFT 项目分析
+- 复杂函数调用分析
+- 市场合约分析
+
+### 🤝 贡献
+
+欢迎贡献！请随时提交 Pull Request。
+
+### 📄 许可证
+
+本项目采用 Apache License 2.0 许可证。
