@@ -4,3 +4,4 @@ target/
 tmp/
 .kiro/
 .vscode/
+.DS_Store
